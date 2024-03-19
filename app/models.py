@@ -603,7 +603,7 @@ class EppsFinyrMst(db.Model):
     updated_by = db.Column(db.String(10), nullable=True)
     updated_dt = db.Column(db.DateTime, nullable=True, onupdate=datetime.utcnow)
     terminal_id = db.Column(db.String(100), nullable=True)
-    active_yn = db.Column(db.String(1), nullable=True)
+    active_yn = db.Column(db.String(1), nullable=False, server_default='Y', info={'choices': ['Y', 'N']})
     creator_role_cd = db.Column(db.SmallInteger, nullable=True)
     updator_role_cd = db.Column(db.SmallInteger, nullable=True)
     
@@ -628,7 +628,7 @@ class EppsMmGroupMst(db.Model):
     updated_by = db.Column(db.String(10), nullable=True)
     updated_dt = db.Column(db.DateTime, nullable=True)
     terminal_id = db.Column(db.String(100), nullable=True)
-    active_yn = db.Column(db.String(1))
+    active_yn = db.Column(db.String(1), nullable=False, server_default='Y', info={'choices': ['Y', 'N']})
     group_type = db.Column(db.String(1), nullable=True)
     creator_role_cd = db.Column(db.SmallInteger, nullable=True)
     updator_role_cd = db.Column(db.SmallInteger, nullable=True)
@@ -674,7 +674,7 @@ class EppsMmItemMst(db.Model):
     updated_by = db.Column(db.String(10))
     updated_dt = db.Column(db.DateTime)
     terminal_id = db.Column(db.String(100))
-    active_yn = db.Column(db.String(1))
+    active_yn = db.Column(db.String(1), nullable=False, server_default='Y', info={'choices': ['Y', 'N']})
     gl_cd = db.Column(db.Integer)
     sl_cd = db.Column(db.String(7))
     creator_role_cd = db.Column(db.SmallInteger)
@@ -759,3 +759,254 @@ class EppsMmItemMst(db.Model):
     def __repr__(self):
         return f"<EppsMmItemMst(itemcode='{self.itemcode}')>"
 
+class EppsStateMst(db.Model):
+    __tablename__ = 'epps_state_mst'
+    __table_args__ = {'schema': 'epps_admin'}
+    comp_cd = db.Column(db.Integer, primary_key=True)
+    country_cd = db.Column(db.SmallInteger, primary_key=True)
+    state_cd = db.Column(db.SmallInteger, primary_key=True)
+    state_nm = db.Column(db.String(50))
+    created_by = db.Column(db.String(10))
+    created_dt = db.Column(db.DateTime)
+    updated_by = db.Column(db.String(10))
+    updated_dt = db.Column(db.DateTime)
+    terminal_id = db.Column(db.String(100))
+    active_yn = db.Column(db.String(1), nullable=False, server_default='Y', info={'choices': ['Y', 'N']})
+    creator_role_cd = db.Column(db.SmallInteger)
+    updator_role_cd = db.Column(db.SmallInteger)
+    gst_state_cd = db.Column(db.String(3))
+    gstin_type = db.Column(db.String(3))
+    gstin_state_abbr = db.Column(db.String(10))
+
+class EppsMiscMst(db.Model):
+    __tablename__ = 'epps_misc_mst'
+    __table_args__ = {'schema': 'epps_admin'}
+    comp_cd = db.Column(db.SmallInteger, db.ForeignKey('epps_company_mst.comp_cd'), primary_key=True)
+    misc_sr_no = db.Column(db.Integer, primary_key=True)
+    misc_misc_cd = db.Column(db.String(50))
+    misc_misc_name = db.Column(db.String(100))
+    parent_misc_cd = db.Column(db.Integer, nullable=True)
+    epps_only_flag = db.Column(db.String(1), nullable=True)
+    misc_value = db.Column(db.String(50), nullable=True)
+    remarks = db.Column(db.String(500), nullable=True)
+    created_by = db.Column(db.String(10))
+    created_dt = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_by = db.Column(db.String(10), nullable=True)
+    updated_dt = db.Column(db.DateTime, nullable=True)
+    terminal_id = db.Column(db.String(100), nullable=True)
+    active_yn = db.Column(db.String(1), nullable=False, server_default='Y', info={'choices': ['Y', 'N']})
+    misc_type = db.Column(db.String(50), nullable=True)
+    creator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    updator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    module_id = db.Column(db.String(6), nullable=True)
+    operation_done = db.Column(db.String(50), nullable=True)
+    insert_allow = db.Column(db.String(1), nullable=True)
+
+    # Define the relationship with EppsCompanyMst
+    # company = db.relationship('EppsCompanyMst', backref='epps_misc_mst', lazy=True)
+
+    # def __repr__(self):
+    #     return f'<EppsMiscMst {self.misc_misc_name}>'
+
+
+
+class EppsModuleMst(db.Model):
+    __tablename__ = 'epps_module_mst'
+    __table_args__ = {'schema': 'epps_admin'}
+    comp_cd = db.Column(db.SmallInteger, primary_key=True)
+    module_id = db.Column(db.String(6))
+    module_disp_name = db.Column(db.String(50), unique=True, nullable=True)
+    active_yn = db.Column(db.String(1), nullable=False, server_default='Y', info={'choices': ['Y', 'N']})
+    created_by = db.Column(db.String(10))
+    created_dt = db.Column(db.DateTime)
+    updated_by = db.Column(db.String(10), nullable=True)
+    updated_dt = db.Column(db.DateTime, nullable=True)
+    terminal_id = db.Column(db.String(100), nullable=True)
+    module_disp_seq_no = db.Column(db.SmallInteger, nullable=True)
+    creator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    updator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    default_access = db.Column(db.SmallInteger, nullable=True)
+    display_yn = db.Column(db.String(1), nullable=True)
+
+class EppsProgMst(db.Model):
+    __tablename__ = 'epps_prog_mst'
+    __table_args__ = {'schema': 'epps_admin'}
+    comp_cd = db.Column(db.Integer, primary_key=True)
+    prog_cd = db.Column(db.Integer)
+    prog_id = db.Column(db.String(40), nullable=True)
+    prog_disp_name = db.Column(db.String(100))
+    prog_long_name = db.Column(db.String(2000), nullable=True)
+    prog_type = db.Column(db.String(1))
+    parent_id = db.Column(db.Integer, nullable=True)
+    module_id = db.Column(db.String(6), nullable=True)
+    tran_indicator = db.Column(db.String(20), nullable=True)
+    prog_mtqr_flag = db.Column(db.String(1), nullable=True)
+    rep_type = db.Column(db.String(1), nullable=True)
+    menu_pass_parameter = db.Column(db.String(50), nullable=True)
+    prog_report_name = db.Column(db.String(50), nullable=True)
+    prog_menu_display_yn = db.Column(db.String(1), nullable=True)
+    prog_disp_seq_no = db.Column(db.SmallInteger, nullable=True)
+    prog_app_flag = db.Column(db.String(1), nullable=True)
+    default_access_flag = db.Column(db.String(1), nullable=True)
+    epps_admin_flag = db.Column(db.String(1), nullable=True)
+    mwa_flag = db.Column(db.String(1), nullable=True)
+    mob_disp_name = db.Column(db.String(50), nullable=True)
+    mob_sub_menu_flag = db.Column(db.String(1), nullable=True)
+    mob_menu_pass_para = db.Column(db.String(30), nullable=True)
+    screen_role_flag = db.Column(db.String(25), nullable=True)
+    prog_doc_id = db.Column(db.String(25), nullable=True)
+    prog_developed_by = db.Column(db.String(10), nullable=True)
+    created_by = db.Column(db.String(10), nullable=True)
+    created_dt = db.Column(db.DateTime, nullable=True)
+    updated_by = db.Column(db.String(10), nullable=True)
+    updated_dt = db.Column(db.DateTime, nullable=True)
+    terminal_id = db.Column(db.String(100), nullable=True)
+    active_yn = db.Column(db.String(1), nullable=False, server_default='Y', info={'choices': ['Y', 'N']})
+    rep_max_days = db.Column(db.Integer, nullable=True)
+    report_description = db.Column(db.String(250), nullable=True)
+    session_req_yn = db.Column(db.String(1), nullable=True)
+    approval_flag = db.Column(db.String, nullable=True)
+    creator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    updator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    prog_tree_del_flag = db.Column(db.String(15), nullable=True)
+    mob_ecs_flag = db.Column(db.String(1), nullable=True)
+    allow_excel_down_yn = db.Column(db.String(1), nullable=True)
+    noti_config_yn = db.Column(db.String(1), nullable=True)
+    java_notification_cls_name = db.Column(db.String(100), nullable=True)
+    rep_disp_name = db.Column(db.String(100), nullable=True)
+    multi_screen_yn = db.Column(db.SmallInteger, nullable=True)
+    db_ct_type = db.Column(db.String(1), nullable=True)
+    dt_param_type = db.Column(db.String(1), nullable=True)
+    view_disp_name = db.Column(db.String(30), nullable=True)
+    view_entity_name = db.Column(db.String(500), nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('comp_cd', 'prog_cd'),
+    )
+
+
+class EppsRoleProgLnk(db.Model):
+    comp_cd = db.Column(db.Integer, db.ForeignKey('epps_prog_mst.comp_cd'), primary_key=True)
+    div_cd = db.Column(db.SmallInteger)
+    role_cd = db.Column(db.SmallInteger)
+    prog_cd = db.Column(db.Integer, db.ForeignKey('epps_prog_mst.prog_cd'))
+    created_by = db.Column(db.String(10), nullable=True)
+    created_dt = db.Column(db.DateTime, nullable=True)
+    updated_by = db.Column(db.String(10), nullable=True)
+    updated_dt = db.Column(db.DateTime, nullable=True)
+    terminal_id = db.Column(db.String(100), nullable=True)
+    active_yn = db.Column(db.String(1), nullable=False, server_default='Y', info={'choices': ['Y', 'N']})
+    insert_flag = db.Column(db.String(1), nullable=True)
+    update_flag = db.Column(db.String(1), nullable=True)
+    delete_flag = db.Column(db.String(1), nullable=True)
+    query_flag = db.Column(db.String(1), nullable=True)
+    creator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    updator_role_cd = db.Column(db.SmallInteger, nullable=True)
+
+    epps_prog_mst = db.relationship('EppsProgMst', foreign_keys=[comp_cd, prog_cd])
+    
+    __tablename__ = 'epps_role_prog_lnk'
+    __table_args__ = (
+        db.ForeignKeyConstraint(['comp_cd', 'prog_cd'], ['epps_prog_mst.comp_cd', 'epps_prog_mst.prog_cd']),
+    )
+
+
+class EppsRoleMst(db.Model):
+    __tablename__ = 'epps_role_mst'
+    __table_args__ = {'schema': 'epps_admin'}
+    id = db.Column(db.Integer, primary_key=True)
+    comp_cd = db.Column(db.Integer, ForeignKey('epps_division_mst.comp_cd'))
+    div_cd = db.Column(db.SmallInteger)
+    role_cd = db.Column(db.SmallInteger)
+    role_disp_name = db.Column(db.String(50), nullable=True)
+    role_long_name = db.Column(db.String(50), nullable=True)
+    role_parent_role = db.Column(db.SmallInteger, nullable=True)
+    role_type = db.Column(db.String(50), nullable=True)
+    role_disp_seq_no = db.Column(db.SmallInteger, nullable=True)
+    sys_admin_flag = db.Column(db.String(1), nullable=True)
+    role_id = db.Column(db.String(50), nullable=True)
+    per_item_limit = db.Column(db.DECIMAL(21, 2), nullable=True)
+    per_transaction_limit = db.Column(db.DECIMAL(21, 2), nullable=True)
+    created_by = db.Column(db.String(10), nullable=False)
+    created_dt = db.Column(db.DateTime, nullable=False)
+    updated_by = db.Column(db.String(10), nullable=True)
+    updated_dt = db.Column(db.DateTime, nullable=True)
+    terminal_id = db.Column(db.String(100), nullable=True)
+    active_yn = db.Column(db.String(1), nullable=False, server_default='Y', info={'choices': ['Y', 'N']})
+    creator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    updator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    role_exp_app_flag = db.Column(db.String(1), nullable=False)
+    ref_role_id = db.Column(db.String(10), nullable=True)
+    hr_admin_flag = db.Column(db.SmallInteger, nullable=True)
+    default_yn = db.Column(db.SmallInteger, nullable=True)
+
+    # Define a relationship to EppsDivisionMst
+    # division = relationship("EppsDivisionMst", back_populates="roles")
+
+    def __repr__(self):
+        return f"<EppsRoleMst(id={self.id}, role_cd={self.role_cd}, comp_cd={self.comp_cd})>"
+
+
+class EppsStageMst(db.Model):
+    __tablename__ = 'epps_stage_mst'
+    __table_args__ = {'schema': 'epps_admin'}
+    comp_cd = db.Column(db.Integer, db.ForeignKey('epps_tran_indicator.comp_cd'), primary_key=True)
+    ti_code = db.Column(db.String(20), primary_key=True)
+    stage_cd = db.Column(db.SmallInteger, primary_key=True)
+    stage_desc = db.Column(db.String(20))
+    created_by = db.Column(db.String(10), nullable=True)
+    created_dt = db.Column(db.DateTime, nullable=True)
+    updated_by = db.Column(db.String(10), nullable=True)
+    updated_dt = db.Column(db.DateTime, nullable=True)
+    terminal_id = db.Column(db.String(100), nullable=True)
+    active_yn = db.Column(db.String(1), nullable=False, server_default='Y', info={'choices': ['Y', 'N']})
+    creator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    updator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    module_id = db.Column(db.String(6), nullable=True)
+
+
+class EppsMmSubGroupMst(db.Model):
+    __tablename__ = 'epps_mm_sub_group_mst'
+    __table_args__ = {'schema': 'epps_mms'}
+    comp_cd = db.Column(db.Integer, db.ForeignKey('epps_mm_group_mst.comp_cd'), primary_key=True)
+    grp_cd = db.Column(db.SmallInteger, primary_key=True)
+    grs_cd = db.Column(db.SmallInteger, primary_key=True)
+    grs_disp_name = db.Column(db.String(50))
+    grs_long_name = db.Column(db.String(100))
+    mnt_grp_flag = db.Column(db.String(1), nullable=True)
+    created_by = db.Column(db.String(10), nullable=True)
+    created_dt = db.Column(db.DateTime, nullable=True)
+    updated_by = db.Column(db.String(10), nullable=True)
+    updated_dt = db.Column(db.DateTime, nullable=True)
+    terminal_id = db.Column(db.String(100), nullable=True)
+    active_yn = db.Column(db.String(1), nullable=False, server_default='Y', info={'choices': ['Y', 'N']})
+    creator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    updator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    grs_ref_cd = db.Column(db.String(15), nullable=True)
+    sub_group_unid = db.Column(db.String(5), nullable=True)
+
+class EppsMmSubSubGroupMst(db.Model):
+    __tablename__ = 'epps_mm_sub_sub_group_mst'
+    __table_args__ = {'schema': 'epps_mms'}
+    comp_cd = db.Column(db.SmallInteger, primary_key=True)
+    grp_cd = db.Column(db.SmallInteger)
+    grs_cd = db.Column(db.SmallInteger, db.ForeignKey('epps_mm_sub_group_mst.grs_cd'))
+    grss_cd = db.Column(db.SmallInteger)
+    grs_disp_name = db.Column(db.String(50))
+    grs_long_name = db.Column(db.String(100))
+    mnt_grp_flag = db.Column(db.String(1), nullable=True)
+    created_by = db.Column(db.String(10), nullable=True)
+    created_dt = db.Column(db.DateTime, nullable=True)
+    updated_by = db.Column(db.String(10), nullable=True)
+    updated_dt = db.Column(db.DateTime, nullable=True)
+    terminal_id = db.Column(db.String(100), nullable=True)
+    active_yn = db.Column(db.String(1), nullable=False, server_default='Y', info={'choices': ['Y', 'N']})
+    creator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    updator_role_cd = db.Column(db.SmallInteger, nullable=True)
+    grss_ref_cd = db.Column(db.String(15), nullable=True)
+    sub_sub_group_unid = db.Column(db.String(5), nullable=True)
+
+    # __tablename__ = 'epps_mm_sub_sub_group_mst'
+    # __table_args__ = (
+    #     db.UniqueConstraint('comp_cd', 'grp_cd', 'grs_cd', 'grss_cd'),
+    # )

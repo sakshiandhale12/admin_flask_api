@@ -1,14 +1,12 @@
 from flask import request, jsonify
-from flask_restx import Resource, Namespace, fields
+from flask_restx import Resource, Namespace, fields,reqparse
 from .models import EppsHrEmpMst
-from .serializer import EppsLocationMstSchema,EppsMmGroupMstSchema,EppsFinyrMstSchema,EppsDivisionMstSchema, EmployeeSerializer,EppsEcodeMstSchema,EppsDeptMstSerializer,EppsCityMstSerializer,EppsCurrencyMstSerializer,EppsSdCustomerMstSchema
+from .serializer import EppsModuleMstSchema,EppsMiscMstSchema,EppsLocationMstSchema,EppsMmGroupMstSchema,EppsFinyrMstSchema,EppsDivisionMstSchema, EmployeeSerializer,EppsEcodeMstSchema,EppsDeptMstSerializer,EppsCityMstSerializer,EppsCurrencyMstSerializer,EppsSdCustomerMstSchema
 from .models import db
-from .models import EppsMmItemMst,EppsMmGroupMst,EppsFinyrMst,EppsHrEmpMst,EppsDivisionMst,VAuditTrailYn,EppsDeptMst,EppsLocationMst, EppsHrProjectResLnk,EppsBusinessZoneMst,EppsEcodeMst,EppsCityMst,EppsSdCustomerMst,EppsCompanyMst,EppsCurrencyMst
+from .models import EppsMmSubSubGroupMst, EppsMmSubGroupMst,EppsStageMst,EppsRoleMst,EppsRoleProgLnk,EppsProgMst,EppsMiscMst,EppsModuleMst,EppsMmItemMst,EppsMmGroupMst,EppsFinyrMst,EppsHrEmpMst,EppsDivisionMst,VAuditTrailYn,EppsDeptMst,EppsLocationMst, EppsHrProjectResLnk,EppsBusinessZoneMst,EppsEcodeMst,EppsCityMst,EppsSdCustomerMst,EppsCompanyMst,EppsCurrencyMst
 from datetime import datetime
 from flask import Flask
 from flask_jwt_extended import create_access_token, jwt_required,create_refresh_token
-
-# from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 
 import bcrypt
 
@@ -333,7 +331,7 @@ class EppsHrEmpMstView(Resource):
             'total_items': total_records
         })
     
-
+# from .dto import employee_dto
 employee_dto = ns.model('EmployeeDTO', {
     'companyCode': fields.Integer(default=1),
     'divisionCode': fields.Integer(),
@@ -1759,10 +1757,7 @@ class EppsItemMasterViews(Resource):
         per_page = min(int(request.args.get('per_page', 100)), 100)
         is_active = request.args.get('isActive')
         divisionCode = request.args.get('divisionCode')
-        # location_codes = request.args.getlist('locationCode')
-        # parsed_location_codes = []
-        # for code in location_codes:
-        #     parsed_location_codes.extend(map(int, code.split(',')))
+        location_codes = request.args.get('locationCode')
         groupCodes = request.args.get('groupCodes')
         subGroupCodes = request.args.get('subGroupCodes')
         subSubGroupCodes = request.args.get('subSubGroupCodes')
@@ -1786,26 +1781,31 @@ class EppsItemMasterViews(Resource):
         if divisionCode:
             query = query.filter(EppsLocationMst.div_cd == divisionCode)
         if groupCodes:
-            query = query.filter(EppsMmItemMst.grp_cd == groupCodes)
+            groupCodes = [int(code) for code in groupCodes.split(',')]
+            query = query.filter(EppsMmItemMst.grp_cd.in_(groupCodes))
         if subGroupCodes:
-            query = query.filter(EppsMmItemMst.grs_cd == subGroupCodes)
+            subGroupCodes = [int(code) for code in subGroupCodes.split(',')]
+            query = query.filter(EppsMmItemMst.grs_cd.in_(subGroupCodes))
         if subSubGroupCodes:
-            query = query.filter(EppsMmItemMst.grss_cd == subSubGroupCodes)
+            subSubGroupCodes = [int(code) for code in subSubGroupCodes.split(',')]
+            query = query.filter(EppsMmItemMst.grss_cd.in_(subSubGroupCodes))
         if itemCategories:
-            query = query.filter(EppsMmItemMst.item_category == itemCategories)
+            itemCategories = [int(code) for code in itemCategories.split(',')]
+            query = query.filter(EppsMmItemMst.item_category.in_(itemCategories))
         if itemCodes:
-            query = query.filter(EppsMmItemMst.itemcode == itemCodes)
-        # if parsed_location_codes:
-        #     query = query.filter(EppsLocationMst.loc_cd.in_(parsed_location_codes))
+            itemCodes = [int(code) for code in itemCodes.split(',')]
+            query = query.filter(EppsMmItemMst.itemcode.in_(itemCodes))
         if tranIndicatorType:
             query = query.filter(EppsWebNotificationPool.tran_ind_type == tranIndicatorType)
         if is_active is not None:
             query = query.filter(EppsMmItemMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+        
+        if location_codes:
+            location_codes = [int(code) for code in location_codes.split(',')]
+            query = query.filter(EppsLocationMst.loc_cd.in_(location_codes))
 
-        # Execute the query with pagination and retrieve the results
         pagination = query.offset(offset).limit(per_page).all()
 
-        # Prepare the response data
         result = []
         for record in pagination:
             epps_mm_item_mst, epps_location_mst, epps_web_notification_pool = record
@@ -1912,9 +1912,6 @@ class EppsSdCustomerMstViews(Resource):
             'total_items': total_records
         })
     
-#Location MAster
-
-
 ns_location= Namespace('location', description="Item Master API Details")
 @ns_location.route("/v1")
 class EppsLocationMstviews(Resource):
@@ -2003,55 +2000,52 @@ class EppsHrEmpMstaslocationView(Resource):
             'per_page': per_page,
             'total_items': total_records
         })
-from flask import jsonify
-from flask_restx import Resource, reqparse
+
 parser = reqparse.RequestParser()
-parser.add_argument('companyCode', type=int)
-parser.add_argument('divisionCode', type=int)
-parser.add_argument('isActive', type=str)
-parser.add_argument('locations', type=int, action='append')  # Use action='append' for array parameters
+parser.add_argument('companyCode', type=int, help='Provide Company Code', default=1)
+parser.add_argument('divisionCode', type=int, help='Provide Division Code')
+parser.add_argument('auditTrailYn', type=int, help='Provide Audit Trail YesNo 1(Yes) or 0(No) Flag', default=0)
+parser.add_argument('isActive', type=int, help='Active 1/0')
+parser.add_argument('paginationSearchVO', type=dict, location='args')
 
-@ns_location.route("/v1/locations")
-class EppsHrEmpMstaslocationView(Resource):
-    @ns_location.doc(description='Endpoint to get department details', params={
-        'companyCode': 'Company Code',
-        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
-        'page': 'Page number',
-        'per_page': 'Items per page',
-        'locationCode': {'description': 'Provide an array of location codes', 'type': 'array', 'items': {'type': 'integer'}}
-    })
-    def get(self):
+
+@ns_location.route("/v1/<locations>")
+class LocationListView(Resource):
+    @ns_location.doc(description='API for fetching location list based on provided location code list',
+                     params={
+                         'companyCode': 'Provide Company Code',
+                         'divisionCode': 'Provide Division Code',
+                         'auditTrailYn': 'Provide Audit Trail YesNo 1(Yes) or 0(No) Flag',
+                         'isActive': 'Active 1/0',
+                         'locations': {'description': 'Provide List of location codes', 'type': 'array',
+                                       'items': {'type': 'integer'}}
+                     })
+    def get(self, locations):
+
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
         args = parser.parse_args()
-        page = int(args.get('page', 1))
-        per_page = min(int(args.get('per_page', 100)), 100)
+        company_code = args['companyCode']
+        division_code = args['divisionCode']
+        is_active = args['isActive']
 
-        company_code = args.get('companyCode')
-        location_codes = args.get('locations', [])  # Use get() with default value for array parameters
-        is_active = args.get("isActive")
-        division_code = args.get('divisionCode')
-
-        # Start building the query
-        query = db.session.query(EppsLocationMst)
+        query = EppsLocationMst.query
 
         if company_code:
             query = query.filter(EppsLocationMst.comp_cd == company_code)
         if division_code:
             query = query.filter(EppsLocationMst.div_cd == division_code)
         if is_active is not None:
-            query = query.filter(EppsLocationMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+            query = query.filter(EppsLocationMst.active_yn == ('Y' if is_active == 1 else 'N'))
 
         # Filter by multiple location codes
-        if location_codes:
+        if locations:
+            location_codes = [int(code) for code in locations.split(',')]
             query = query.filter(EppsLocationMst.loc_cd.in_(location_codes))
 
         total_records = query.count()
 
-        # Continue with your pagination logic
-        offset = (page - 1) * per_page
-        pagination = query.offset(offset).limit(per_page).all()
-
-        # Convert the result to JSON using marshmallow schema
-        result = EppsLocationMstSchema(many=True).dump(pagination)
+        result = EppsLocationMstSchema(many=True).dump(query)
 
         return jsonify({
             'department_mst': result,
@@ -2059,3 +2053,1630 @@ class EppsHrEmpMstaslocationView(Resource):
             'per_page': per_page,
             'total_items': total_records
         })
+
+# Assuming EppsLocationMst and other relevant models are your SQLAlchemy models
+from .models import db, EppsLocationMst, EppsDivisionMst#, EppsCityMst, EppsStateMst
+
+# ... (your other imports)
+
+# Define a DTO for the location
+location_dto = ns_location.model('locationDTO', {
+    'companyCode': fields.Integer(default=1),
+    'divisionCode': fields.Integer(),
+    'locationCode': fields.Integer(),
+    'locationDisplayName': fields.String(),
+    'address': fields.String(),
+    'countryCode': fields.Integer(),
+    'stateCode': fields.Integer(),
+    'parentLocCd': fields.Integer(),
+    'cityCode': fields.Integer()
+})
+
+@ns_location.route("/location/v1/")
+class LocationCreate(Resource):
+    # @jwt_required()
+    @ns.expect(location_dto, validate=True)
+    @ns.doc(description='Resource to Create Location Details')
+    def post(self):
+        try:
+            request_data = request.get_json()
+
+            # Set default values for comp_cd and process other request_data
+            comp_cd = request_data.get('companyCode', 1)
+            division_code = request_data.get('divisionCode')
+            loc_code = request_data.get('locationCode')
+            address = request_data.get('address')
+            loc_disp_name = request_data.get('locationDisplayName')
+            country_cd = request_data.get('countryCode')
+            state_cd = request_data.get('stateCode')
+            city_cd = request_data.get('cityCode')
+            parent_loc_cd = request_data.get('parentLocCd')
+
+            # # Check if division exists
+            # existing_city = EppsCityMst.query.filter_by(comp_cd=comp_cd, country_cd=country_cd, state_cd=state_cd,city_cd=city_cd).first()
+            # if existing_city is None:
+            #     return {'error': 'city does not exist'}, 400
+
+            # Create a new location record
+            new_location = EppsLocationMst(
+                comp_cd=comp_cd,
+                div_cd=division_code,
+                loc_cd=loc_code,
+                add1=address,
+                loc_disp_name=loc_disp_name,
+                country_cd=country_cd,
+                state_cd=state_cd,
+                city_cd=city_cd,
+                parent_loc_cd=parent_loc_cd
+            )
+
+            # Add the new location record to the database
+            db.session.add(new_location)
+            db.session.commit()
+
+            # Return success response
+            return {'message': 'Location Record Created Successfully'}, 200
+        except Exception as e:
+            # Handle any exceptions and return an error response
+            return {'error': str(e)}, 500
+
+# Import your database models
+from .models import db, EppsLocationMst, EppsDivisionMst,  EppsStateMst, EppsCityMst  # Import your models from the 'models' module
+
+# ... (other imports)
+
+# Define your DTO model
+location_dto = ns_location.model('locationDTO', {
+    'companyCode': fields.Integer(default=1),
+    'divisionCode': fields.Integer(),
+    'locationCode': fields.Integer(),
+    'locationDisplayName': fields.String(),
+    'address': fields.String(),
+    'countryCode': fields.Integer(),
+    'stateCode': fields.Integer(),
+    'parentLocCd': fields.Integer(),
+    'cityCode': fields.Integer()
+})
+
+# Define your resource class
+@ns_location.route("/location/v1/")
+class LocationCreate(Resource):
+    # @jwt_required()
+    @ns.expect(location_dto, validate=True)
+    @ns.doc(description='Resource to Create Location Details')
+    def post(self):
+        try:
+            request_data = request.get_json()
+
+            # Set default values for comp_cd and process other request_data
+            comp_cd = request_data.get('companyCode', 1)
+            division_code = request_data.get('divisionCode')
+            loc_code = request_data.get('locationCode')
+            address = request_data.get('address')
+            loc_disp_name = request_data.get('locationDisplayName')
+            country_cd = request_data.get('countryCode')
+            state_cd = request_data.get('stateCode')
+            city_cd = request_data.get('cityCode')
+            parent_loc_cd = request_data.get('parentLocCd')
+
+            # Check if division exists
+            existing_division = EppsDivisionMst.query.filter_by(comp_cd=comp_cd, div_cd=division_code).first()
+            if existing_division is None:
+                return {'error': 'Division does not exist'}, 400
+
+            # Create a new location record
+            new_location = EppsLocationMst(
+                comp_cd=comp_cd,
+                div_cd=division_code,
+                loc_cd=loc_code,
+                # add1=address,
+                loc_disp_name=loc_disp_name,
+                country_cd=country_cd,
+                state_cd=state_cd,
+                city_cd=city_cd,
+                parent_loc_cd=parent_loc_cd
+            )
+
+            # Add the new location record to the database
+            db.session.add(new_location)
+            db.session.commit()
+
+            # Return success response
+            return {'message': 'Location Record Created Successfully'}, 200
+        except Exception as e:
+            # Handle any exceptions and return an error response
+            return {'error': str(e)}, 500
+
+    # Modify this function for updating existing location details
+    @ns.expect(location_dto, validate=True)
+    @ns.doc(description='Resource to Update Location Details')
+    def put(self):
+        try:
+            request_data = request.get_json()
+
+            # Extract necessary data for update
+            comp_cd = request_data.get('companyCode', 1)
+            division_code = request_data.get('divisionCode')
+            loc_code = request_data.get('locationCode')
+
+            # Check if the location exists
+            existing_location = EppsLocationMst.query.filter_by(comp_cd=comp_cd, div_cd=division_code, loc_cd=loc_code).first()
+            if existing_location is None:
+                return {'error': 'Location does not exist'}, 404
+
+            # Update location details
+            existing_location.add1 = request_data.get('address', existing_location.add1)
+            existing_location.loc_disp_name = request_data.get('locationDisplayName', existing_location.loc_disp_name)
+            existing_location.country_cd = request_data.get('countryCode', existing_location.country_cd)
+            existing_location.state_cd = request_data.get('stateCode', existing_location.state_cd)
+            existing_location.city_cd = request_data.get('cityCode', existing_location.city_cd)
+            existing_location.parent_loc_cd = request_data.get('parentLocCd', existing_location.parent_loc_cd)
+
+            # Commit the changes to the database
+            db.session.commit()
+
+            # Return success response
+            return {'message': 'Location Record Updated Successfully'}, 200
+        except Exception as e:
+            # Handle any exceptions and return an error response
+            return {'error': str(e)}, 500
+
+
+  
+ns_miscellaneous= Namespace('miscellaneous', description="Item Master API Details")
+@ns_miscellaneous.route("/v1")
+class EppsMiscMstviews(Resource):
+    # @jwt_required()
+    @ns_location.doc(description='Endpoint to get department details', params={
+        'companyCode':  {'description': 'provide company code', 'type': 'integer'},
+        'miscType': {'description': 'provide miscType', 'type': 'integer'},
+        'miscCode': {'description': 'provide miscCode', 'type': 'integer'},
+        'miscValue': {'description': 'provide miscValue', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'auditTrailYn': {'description': 'Provide Audit Trail Yes/No 1(Yes) or 0(No) Flag', 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)  
+
+        company_code = request.args.get('companyCode')
+        misc_type = request.args.get("miscType")
+        misc_code = request.args.get("miscCode")
+        misc_value = request.args.get("miscValue")
+        is_active = request.args.get("isActive")
+        total_records = EppsMiscMst.query.count()
+
+        offset = (page - 1) * per_page
+
+        query = EppsMiscMst.query
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if misc_type:
+            query = query.filter_by(misc_type=misc_type)
+        if misc_code:  
+            query = query.filter_by(misc_cd=misc_code)
+        if misc_value:  
+            query = query.filter_by(misc_value=misc_value)
+        if is_active is not None:
+            query = query.filter(EppsMiscMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd' : link.comp_cd,
+                'misc_sr_no' : link.misc_sr_no,
+                'misc_misc_cd':link.misc_misc_cd,
+                'misc_misc_name':link.misc_misc_name,
+                'parent_misc_cd':link.parent_misc_cd,
+                'epps_only_flag':link.epps_only_flag,
+                'misc_value' :link.misc_value,
+                'remarks' :link.remarks,
+                'created_by':link.created_by,
+                'created_dt':link.created_dt,
+                'updated_by':link.updated_by,
+                'updated_dt':link.updated_dt,
+                'terminal_id' :link.terminal_id,
+                'active_yn':link.active_yn,
+                'misc_type':link.misc_type,
+                'creator_role_cd': link.creator_role_cd,
+                'updator_role_cd':link.updator_role_cd,
+                'module_id' :link.module_id,
+                'operation_done':link.operation_done,
+                'insert_allow' :link.insert_allow
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+    
+
+@ns_miscellaneous.route("/v1/<string:miscType>")
+class EppsHrEmpMstaslocationView(Resource):
+    # @jwt_required()
+    @ns_location.doc(description='Endpoint to get department details', params={
+        'companyCode': 'Company Code',
+        'miscCode': {'description': 'provide miscCode', 'type': 'integer'},
+        'miscValue': {'description': 'provide miscValue', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self, miscType):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        company_code = request.args.get('companyCode')
+        misc_code = request.args.get('miscCode')
+        misc_value = request.args.get('miscValue')
+        is_active = request.args.get("isActive")
+        total_records = EppsMiscMst.query.count()
+        query = EppsMiscMst.query.filter_by(misc_type=miscType)
+
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if misc_code:
+            query = query.filter_by(misc_misc_cd=misc_code)
+        if misc_value:
+            query = query.filter_by(misc_value=misc_value)
+        if is_active is not None:
+            query = query.filter(EppsMiscMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd' : link.comp_cd,
+                'misc_sr_no' : link.misc_sr_no,
+                'misc_misc_cd':link.misc_misc_cd,
+                'misc_misc_name':link.misc_misc_name,
+                'parent_misc_cd':link.parent_misc_cd,
+                'epps_only_flag':link.epps_only_flag,
+                'misc_value' :link.misc_value,
+                'remarks' :link.remarks,
+                'created_by':link.created_by,
+                'created_dt':link.created_dt,
+                'updated_by':link.updated_by,
+                'updated_dt':link.updated_dt,
+                'terminal_id' :link.terminal_id,
+                'active_yn':link.active_yn,
+                'misc_type':link.misc_type,
+                'creator_role_cd': link.creator_role_cd,
+                'updator_role_cd':link.updator_role_cd,
+                'module_id' :link.module_id,
+                'operation_done':link.operation_done,
+                'insert_allow' :link.insert_allow
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+
+# @ns_miscellaneous.route("/v1/<string:miscType>/<string:micsCode>")
+@ns_miscellaneous.route("/v1/<string:miscType>/<string:micsCode>")
+
+class EppsHrEmpMstaslocationView(Resource):
+    # @jwt_required()
+    @ns_location.doc(description='Endpoint to get department details', params={
+        'companyCode': 'Company Code',
+        'miscValue': {'description': 'provide miscValue', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self, miscType, micsCode):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        company_code = request.args.get('companyCode')
+        misc_value = request.args.get('miscValue')
+        is_active = request.args.get("isActive")
+        total_records = EppsMiscMst.query.count()
+        query = EppsMiscMst.query.filter_by(misc_type=miscType)
+        query = EppsMiscMst.query.filter_by(misc_misc_cd=micsCode)
+        # query = EppsMiscMst.query.filter_by(misc_type=miscType, misc_misc_cd=micsCode).first()
+
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if misc_value:
+            query = query.filter_by(misc_value=misc_value)
+        if is_active is not None:
+            query = query.filter(EppsMiscMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd' : link.comp_cd,
+                'misc_sr_no' : link.misc_sr_no,
+                'misc_misc_cd':link.misc_misc_cd,
+                'misc_misc_name':link.misc_misc_name,
+                'parent_misc_cd':link.parent_misc_cd,
+                'epps_only_flag':link.epps_only_flag,
+                'misc_value' :link.misc_value,
+                'remarks' :link.remarks,
+                'created_by':link.created_by,
+                'created_dt':link.created_dt,
+                'updated_by':link.updated_by,
+                'updated_dt':link.updated_dt,
+                'terminal_id' :link.terminal_id,
+                'active_yn':link.active_yn,
+                'misc_type':link.misc_type,
+                'creator_role_cd': link.creator_role_cd,
+                'updator_role_cd':link.updator_role_cd,
+                'module_id' :link.module_id,
+                'operation_done':link.operation_done,
+                'insert_allow' :link.insert_allow
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+ 
+ns_module= Namespace('module', description="Item Master API Details")
+
+@ns_module.route("/v1")
+class EppsModuleMst2views(Resource):
+    # @jwt_required()
+    @ns_module.doc(description='Endpoint to get department details', params={
+        'companyCode':  {'description': 'provide company code', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'auditTrailYn': {'description': 'Provide Audit Trail Yes/No 1(Yes) or 0(No) Flag', 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)  
+
+        company_code = request.args.get('companyCode')
+        is_active = request.args.get("isActive")
+        total_records = EppsModuleMst.query.count()
+
+        offset = (page - 1) * per_page
+
+        query = EppsModuleMst.query
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if is_active is not None:
+            query = query.filter(EppsModuleMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'module_id': link.module_id,
+                'module_disp_name': link.module_disp_name,
+                'active_yn': link.active_yn,
+                'created_by': link.created_by,
+                'created_dt': link.created_dt,
+                'updated_by': link.updated_by,
+                'updated_dt': link.updated_dt,
+                'terminal_id': link.terminal_id,
+                # 'module_disp_seq_no': link.module_disp_seq_no,
+                'creator_role_cd': link.creator_role_cd,
+                'updator_role_cd': link.updator_role_cd,
+                'default_access': link.default_access,
+                'display_yn': link.display_yn
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+    
+@ns_module.route("/v1/modules/<string:id>")
+
+class EppsModuleMstView(Resource):
+    # @jwt_required()
+    @ns_department.doc(description='Endpoint to get department details', params={
+        'companyCode': 'Company Code',
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self,id ):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        company_code = request.args.get('companyCode')
+        is_active = request.args.get("isActive")
+        total_records = EppsModuleMst.query.count()
+        query = EppsModuleMst.query.filter_by(module_id=id)
+      
+
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if is_active is not None:
+            query = query.filter(EppsModuleMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'module_id': link.module_id,
+                'module_disp_name': link.module_disp_name,
+                'active_yn': link.active_yn,
+                'created_by': link.created_by,
+                'created_dt': link.created_dt,
+                'updated_by': link.updated_by,
+                'updated_dt': link.updated_dt,
+                'terminal_id': link.terminal_id,
+                # 'module_disp_seq_no': link.module_disp_seq_no,
+                'creator_role_cd': link.creator_role_cd,
+                'updator_role_cd': link.updator_role_cd,
+                'default_access': link.default_access,
+                'display_yn': link.display_yn
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+    
+ns_program= Namespace('program', description="program Master API Details")
+
+@ns_program.route("/v1", methods=["GET"])
+class EppsCityMstViews(Resource):
+    # @jwt_required()
+    @ns_program.doc(description='Resource To Read E-Code Category Link Data', params={
+        'companyCode':  {'description': 'provide company code', 'type': 'integer'},
+        'programCode':  {'description': 'provide programCode', 'type': 'integer'},
+        'programDisplayName':  {'description': 'provide programDisplayName', 'type': 'string'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'auditTrailYn': {'description': 'Provide Audit Trail Yes/No 1(Yes) or 0(No) Flag', 'type': 'integer'},
+        'moduleId':  {'description': 'provide moduleId', 'type': 'string'},
+        'page': {'description': 'Page number', 'type': 'integer'},
+        'per_page': {'description': 'Items per page', 'type': 'integer'}
+    })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)  
+
+        company_code = request.args.get('companyCode')
+        program_code = request.args.get('programCode')
+        program_disp_name = request.args.get('programDisplayName')
+        module_id = request.args.get('moduleId')
+        is_active = request.args.get("isActive")       
+        total_records = EppsProgMst.query.count()
+
+        query = EppsProgMst.query
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if program_code:
+            query = query.filter_by(prog_cd=program_code)
+        if program_disp_name:
+            query = query.filter_by(prog_disp_name=program_disp_name)
+        if module_id:
+            query = query.filter_by(module_id=module_id)
+        if is_active is not None:
+            query = query.filter(EppsProgMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        offset = (page - 1) * per_page
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'prog_cd': link.prog_cd,
+                'prog_id': link.prog_id,
+                'prog_disp_name': link.prog_disp_name,
+                'prog_long_name': link.prog_long_name,
+                'prog_type': link.prog_type,
+                'parent_id': link.parent_id,
+                'module_id': link.module_id,
+                'tran_indicator': link.tran_indicator,
+                'prog_mtqr_flag': link.prog_mtqr_flag,
+                'rep_type': link.rep_type,
+                'menu_pass_parameter': link.menu_pass_parameter,
+                'prog_report_name': link.prog_report_name,
+                'prog_menu_display_yn': link.prog_menu_display_yn,
+                'prog_disp_seq_no': link.prog_disp_seq_no
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records  
+        })
+
+
+
+@ns_program.route("/v1/<int:programCode>")
+
+class EppsProgMstView(Resource):
+    # @jwt_required()
+    @ns_department.doc(description='Endpoint to get department details', params={
+        'companyCode': 'Company Code',
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self,programCode ):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        company_code = request.args.get('companyCode')
+        is_active = request.args.get("isActive")
+        total_records = EppsProgMst.query.count()
+        query = EppsProgMst.query.filter_by(prog_cd=programCode)
+      
+
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if is_active is not None:
+            query = query.filter(EppsProgMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'prog_cd': link.prog_cd,
+                'prog_id': link.prog_id,
+                'prog_disp_name': link.prog_disp_name,
+                'prog_long_name': link.prog_long_name,
+                'prog_type': link.prog_type,
+                'parent_id': link.parent_id,
+                'module_id': link.module_id,
+                'tran_indicator': link.tran_indicator,
+                'prog_mtqr_flag': link.prog_mtqr_flag,
+                'rep_type': link.rep_type,
+                'menu_pass_parameter': link.menu_pass_parameter,
+                'prog_report_name': link.prog_report_name,
+                'prog_menu_display_yn': link.prog_menu_display_yn,
+                'prog_disp_seq_no': link.prog_disp_seq_no
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+ns_rolelink = Namespace('role/link/', description="customer Master Controller API")
+from sqlalchemy import and_
+
+@ns_rolelink.route("/employee/location/v1", methods=["GET"])
+class EppsSdCustomerMstViews(Resource):
+    # @jwt_required()
+    @ns_rolelink.doc(description='Resource To Read E-Code Category Link Data', params={
+        'companyCode': {'description': 'provide company code', 'type': 'integer'},
+        'divisionCode': {'description': 'provide division code', 'type': 'integer'},
+        'locationCode': {'description': 'provide division code', 'type': 'integer'},
+        'roleCode': {'description': 'provide division code', 'type': 'integer'},
+        'employeeCode': {'description': 'provide division code', 'type': 'integer'},
+        'customerCode': {'description': 'provide customer code', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'selLoctionFlag': {'description': 'sezFlag', 'type': 'integer'},
+        'page': {'description': 'Page number', 'type': 'integer'},
+        'per_page': {'description': 'Items per page', 'type': 'integer'}
+    })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        is_active = request.args.get('isActive')
+        company_code = request.args.get('companyCode')
+        role_code = request.args.get('roleCode')
+        division_code = request.args.get('divisionCode')
+        location_code = request.args.get('locationCode')
+        employee_code = request.args.get('employeeCode')
+
+        total_records = EppsRoleProgLnk.query.count()
+
+        offset = (page - 1) * per_page
+
+        query = db.session.query(EppsRoleProgLnk, EppsLocationMst, EppsHrEmpMst).join(
+            EppsLocationMst, and_(
+                EppsRoleProgLnk.comp_cd == EppsLocationMst.comp_cd,
+                EppsRoleProgLnk.div_cd == EppsLocationMst.div_cd,
+                # Add additional join conditions as needed
+            )
+        ).join(
+            EppsHrEmpMst, and_(
+                EppsRoleProgLnk.comp_cd == EppsHrEmpMst.comp_cd,
+                # Add additional join conditions as needed
+            )
+        )
+
+        if company_code:
+            query = query.filter(EppsRoleProgLnk.comp_cd == company_code)
+        if division_code:
+            query = query.filter(EppsRoleProgLnk.div_cd == division_code)
+        if role_code:
+            query = query.filter(EppsRoleProgLnk.role_cd == role_code)
+        if location_code:
+            query = query.filter(EppsLocationMst.loc_cd == location_code)
+        if employee_code:
+            query = query.filter(EppsHrEmpMst.emp_cd == employee_code)
+        if is_active is not None:
+            query = query.filter(EppsRoleProgLnk.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        pagination = query.offset(offset).limit(per_page).all()
+
+        result = []  # Define a list to store combined results
+
+        for record in pagination:
+            epps_role_mst, epps_location_mst, epps_loc_mst = record
+            # Combine data from all three tables into a single dictionary
+            combined_data = {
+                'comp_cd': epps_role_mst.comp_cd,
+                'div_cd': epps_role_mst.div_cd,
+                # Include fields from EppsLocationMst model
+                'loc_cd': epps_location_mst.loc_cd,
+                # Include fields from EppsWebNotificationPool model
+                'employee_code': epps_loc_mst.emp_cd
+            }
+            result.append(combined_data)
+
+        return jsonify({
+            'customer_mst_combined': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+
+@ns_rolelink.route("/employee/v1/employee/roles", methods=["GET"])
+class EppsSdCustomerMstViews(Resource):
+    # @jwt_required()
+    @ns_rolelink.doc(description='Resource To Read E-Code Category Link Data', params={
+        'companyCode': {'description': 'provide company code', 'type': 'integer'},
+        'divisionCode': {'description': 'provide division code', 'type': 'integer'},
+        'locationCode': {'description': 'provide division code', 'type': 'integer'},
+        'roleCode': {'description': 'provide division code', 'type': 'integer'},
+        'employeeCode': {'description': 'provide division code', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'page': {'description': 'Page number', 'type': 'integer'},
+        'per_page': {'description': 'Items per page', 'type': 'integer'}
+    })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        is_active = request.args.get('isActive')
+        company_code = request.args.get('companyCode')
+        role_code = request.args.get('roleCode')
+        division_code = request.args.get('divisionCode')
+        location_code = request.args.get('locationCode')
+        employee_code = request.args.get('employeeCode')
+
+        total_records = EppsRoleProgLnk.query.count()
+
+        offset = (page - 1) * per_page
+
+        query = db.session.query(EppsRoleProgLnk, EppsLocationMst, EppsHrEmpMst).join(
+            EppsLocationMst, and_(
+                EppsRoleProgLnk.comp_cd == EppsLocationMst.comp_cd,
+                EppsRoleProgLnk.div_cd == EppsLocationMst.div_cd,
+                # Add additional join conditions as needed
+            )
+        ).join(
+            EppsHrEmpMst, and_(
+                EppsRoleProgLnk.comp_cd == EppsHrEmpMst.comp_cd,
+                # Add additional join conditions as needed
+            )
+        )
+
+        if company_code:
+            query = query.filter(EppsRoleProgLnk.comp_cd == company_code)
+        if division_code:
+            query = query.filter(EppsRoleProgLnk.div_cd == division_code)
+        if role_code:
+            query = query.filter(EppsRoleProgLnk.role_cd == role_code)
+        if location_code:
+            query = query.filter(EppsLocationMst.loc_cd == location_code)
+        if employee_code:
+            query = query.filter(EppsHrEmpMst.emp_cd == employee_code)
+        if is_active is not None:
+            query = query.filter(EppsRoleProgLnk.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        pagination = query.offset(offset).limit(per_page).all()
+
+        result = []  # Define a list to store combined results
+
+        for record in pagination:
+            epps_role_mst, epps_location_mst, epps_loc_mst = record
+            # Combine data from all three tables into a single dictionary
+            combined_data = {
+                'comp_cd': epps_role_mst.comp_cd,
+                'div_cd': epps_role_mst.div_cd,
+                # Include fields from EppsLocationMst model
+                'loc_cd': epps_location_mst.loc_cd,
+                # Include fields from EppsWebNotificationPool model
+                'employee_code': epps_loc_mst.emp_cd
+            }
+            result.append(combined_data)
+
+        return jsonify({
+            'customer_mst_combined': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+@ns_rolelink.route("/employee/v1", methods=["GET"])
+class EppsSdCustomerMstViews(Resource):
+    # @jwt_required()
+    @ns_rolelink.doc(description='Resource To Read E-Code Category Link Data', params={
+        'companyCode': {'description': 'provide company code', 'type': 'integer'},
+        'divisionCode': {'description': 'provide division code', 'type': 'integer'},
+        'locationCode': {'description': 'provide division code', 'type': 'integer'},
+        'roleCode': {'description': 'provide division code', 'type': 'integer'},
+        'employeeCode': {'description': 'provide division code', 'type': 'integer'},
+        'customerCode': {'description': 'provide customer code', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'page': {'description': 'Page number', 'type': 'integer'},
+        'per_page': {'description': 'Items per page', 'type': 'integer'}
+    })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        is_active = request.args.get('isActive')
+        company_code = request.args.get('companyCode')
+        role_code = request.args.get('roleCode')
+        division_code = request.args.get('divisionCode')
+        location_code = request.args.get('locationCode')
+        employee_code = request.args.get('employeeCode')
+
+        total_records = EppsRoleProgLnk.query.count()
+
+        offset = (page - 1) * per_page
+
+        query = db.session.query(EppsRoleProgLnk, EppsLocationMst, EppsHrEmpMst).join(
+            EppsLocationMst, and_(
+                EppsRoleProgLnk.comp_cd == EppsLocationMst.comp_cd,
+                EppsRoleProgLnk.div_cd == EppsLocationMst.div_cd,
+                # Add additional join conditions as needed
+            )
+        ).join(
+            EppsHrEmpMst, and_(
+                EppsRoleProgLnk.comp_cd == EppsHrEmpMst.comp_cd,
+                # Add additional join conditions as needed
+            )
+        )
+
+        if company_code:
+            query = query.filter(EppsRoleProgLnk.comp_cd == company_code)
+        if division_code:
+            query = query.filter(EppsRoleProgLnk.div_cd == division_code)
+        if role_code:
+            query = query.filter(EppsRoleProgLnk.role_cd == role_code)
+        if location_code:
+            query = query.filter(EppsLocationMst.loc_cd == location_code)
+        if employee_code:
+            query = query.filter(EppsHrEmpMst.emp_cd == employee_code)
+        if is_active is not None:
+            query = query.filter(EppsRoleProgLnk.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        pagination = query.offset(offset).limit(per_page).all()
+
+        result = []  # Define a list to store combined results
+
+        for record in pagination:
+            epps_role_mst, epps_location_mst, epps_loc_mst = record
+            # Combine data from all three tables into a single dictionary
+            combined_data = {
+                'comp_cd': epps_role_mst.comp_cd,
+                'div_cd': epps_role_mst.div_cd,
+                # Include fields from EppsLocationMst model
+                'loc_cd': epps_location_mst.loc_cd,
+                # Include fields from EppsWebNotificationPool model
+                'employee_code': epps_loc_mst.emp_cd
+            }
+            result.append(combined_data)
+
+        return jsonify({
+            'customer_mst_combined': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+  
+ns_role= Namespace('program', description="program Master API Details")
+
+@ns_role.route("/v1", methods=["GET"])
+class EppsCityMstViews(Resource):
+    # @jwt_required()
+    @ns_role.doc(description='Resource To Read E-Code Category Link Data', params={
+        'companyCode':  {'description': 'provide company code', 'type': 'integer'},
+        'programCode':  {'description': 'provide programCode', 'type': 'integer'},
+        'programDisplayName':  {'description': 'provide programDisplayName', 'type': 'string'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'auditTrailYn': {'description': 'Provide Audit Trail Yes/No 1(Yes) or 0(No) Flag', 'type': 'integer'},
+        'moduleId':  {'description': 'provide moduleId', 'type': 'string'},
+        'page': {'description': 'Page number', 'type': 'integer'},
+        'per_page': {'description': 'Items per page', 'type': 'integer'}
+    })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)  
+
+        company_code = request.args.get('companyCode')
+        program_code = request.args.get('programCode')
+        program_disp_name = request.args.get('programDisplayName')
+        module_id = request.args.get('moduleId')
+        is_active = request.args.get("isActive")       
+        total_records = EppsProgMst.query.count()
+
+        query = EppsProgMst.query
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if program_code:
+            query = query.filter_by(prog_cd=program_code)
+        if program_disp_name:
+            query = query.filter_by(prog_disp_name=program_disp_name)
+        if module_id:
+            query = query.filter_by(module_id=module_id)
+        if is_active is not None:
+            query = query.filter(EppsProgMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        offset = (page - 1) * per_page
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'prog_cd': link.prog_cd,
+                'prog_id': link.prog_id,
+                'prog_disp_name': link.prog_disp_name,
+                'prog_long_name': link.prog_long_name,
+                'prog_type': link.prog_type,
+                'parent_id': link.parent_id,
+                'module_id': link.module_id,
+                'tran_indicator': link.tran_indicator,
+                'prog_mtqr_flag': link.prog_mtqr_flag,
+                'rep_type': link.rep_type,
+                'menu_pass_parameter': link.menu_pass_parameter,
+                'prog_report_name': link.prog_report_name,
+                'prog_menu_display_yn': link.prog_menu_display_yn,
+                'prog_disp_seq_no': link.prog_disp_seq_no
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records  
+        })
+    
+ns_role = Namespace('role', description="customer Master Controller API")
+@ns_role.route("/v1/<int:divisionCode>")
+
+class EppsRoleMstView(Resource):
+    # @jwt_required()
+    @ns_role.doc(description='Endpoint to get department details', params={
+        'companyCode':  {'description': 'provide company code', 'type': 'integer'},
+        'roleCode':  {'description': 'provide roleCode', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'auditTrailYn': {'description': 'auditTrailYn (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self,divisionCode ):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        company_code = request.args.get('companyCode')
+        role_code = request.args.get('roleCode')
+        is_active = request.args.get("isActive")
+        total_records = EppsRoleMst.query.count()
+        query = EppsRoleMst.query.filter_by(div_cd=divisionCode)
+      
+
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if role_code:
+            query = query.filter_by(role_cd=role_code)
+        if is_active is not None:
+            query = query.filter(EppsRoleMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'id' : link.id,
+                'div_cd': link.div_cd,
+                'role_cd' : link.role_cd,
+                'role_disp_name': link.role_disp_name,
+                'role_long_name': link.role_long_name,
+                'role_parent_role' : link.role_parent_role,
+                'role_type' : link.role_type,
+                'role_disp_seq_no': link.role_disp_seq_no,
+                'sys_admin_flag' : link.sys_admin_flag,
+                'role_id': link.role_id,
+                'per_item_limit' : link.per_item_limit,
+                'per_transaction_limit': link.per_transaction_limit,
+                'created_by': link.created_by,
+                'created_dt' : link.created_dt
+               
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+
+from sqlalchemy import and_
+
+@ns_role.route("/v1/<int:divisionCode>/<int:roleCode>")
+class EppsRoleMstView(Resource):
+    # @jwt_required()
+    @ns_role.doc(description='Endpoint to get department details', params={
+        'companyCode':  {'description': 'provide company code', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'auditTrailYn': {'description': 'auditTrailYn (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self, divisionCode, roleCode):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        company_code = request.args.get('companyCode')
+        is_active = request.args.get("isActive")
+
+        query = EppsRoleMst.query.filter_by(div_cd=divisionCode, role_cd=roleCode)
+
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if is_active is not None:
+            query = query.filter(EppsRoleMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'id' : link.id,
+                'div_cd': link.div_cd,
+                'role_cd' : link.role_cd,
+                'role_disp_name': link.role_disp_name,
+                'role_long_name': link.role_long_name,
+                'role_parent_role' : link.role_parent_role,
+                'role_type' : link.role_type,
+                'role_disp_seq_no': link.role_disp_seq_no,
+                'sys_admin_flag' : link.sys_admin_flag,
+                'role_id': link.role_id,
+                'per_item_limit' : link.per_item_limit,
+                'per_transaction_limit': link.per_transaction_limit,
+                'created_by': link.created_by,
+                'created_dt' : link.created_dt
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+
+
+@ns_role.route("/v1/tree")
+class EppsRoleMstView(Resource):
+    # @jwt_required()
+    @ns_role.doc(description='Endpoint to get department details', params={
+        'roleCode':  {'description': 'provide roleCode', 'type': 'integer','required':True},
+        'divisionCode':  {'description': 'provide divisionCode', 'type': 'integer'},
+        'companyCode':  {'description': 'provide company code', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'adminFlag':  {'description': 'provide adminFlag', 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        company_code = request.args.get('companyCode')
+        role_code = request.args.get('roleCode')
+        division_code = request.args.get('divisionCode')
+        is_active = request.args.get("isActive")
+
+        query = EppsRoleMst.query
+
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if role_code:
+            query = query.filter_by(role_cd=role_code)
+        if division_code:
+            query = query.filter_by(div_cd=division_code)
+        if is_active is not None:
+            query = query.filter(EppsRoleMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'id' : link.id,
+                'div_cd': link.div_cd,
+                'role_cd' : link.role_cd,
+                'role_disp_name': link.role_disp_name,
+                'role_long_name': link.role_long_name,
+                'role_parent_role' : link.role_parent_role,
+                'role_type' : link.role_type,
+                'role_disp_seq_no': link.role_disp_seq_no,
+                'sys_admin_flag' : link.sys_admin_flag,
+                'role_id': link.role_id,
+                'per_item_limit' : link.per_item_limit,
+                'per_transaction_limit': link.per_transaction_limit,
+                'created_by': link.created_by,
+                'created_dt' : link.created_dt
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+
+@ns_role.route("/v1/tree/idValue")
+class EppsRoleMstView(Resource):
+    # @jwt_required()
+    @ns_role.doc(description='Endpoint to get department details', params={
+        'roleCode':  {'description': 'provide roleCode', 'type': 'integer','required':True},
+        'divisionCode':  {'description': 'provide divisionCode', 'type': 'integer'},
+        'companyCode':  {'description': 'provide company code', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'adminFlag':  {'description': 'provide adminFlag', 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        company_code = request.args.get('companyCode')
+        role_code = request.args.get('roleCode')
+        division_code = request.args.get('divisionCode')
+        is_active = request.args.get("isActive")
+
+        query = EppsRoleMst.query
+
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if role_code:
+            query = query.filter_by(role_cd=role_code)
+        if division_code:
+            query = query.filter_by(div_cd=division_code)
+        if is_active is not None:
+            query = query.filter(EppsRoleMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'id' : link.id,
+                'div_cd': link.div_cd,
+                'role_cd' : link.role_cd,
+                'role_disp_name': link.role_disp_name,
+                'role_long_name': link.role_long_name,
+                'role_parent_role' : link.role_parent_role,
+                'role_type' : link.role_type,
+                'role_disp_seq_no': link.role_disp_seq_no,
+                'sys_admin_flag' : link.sys_admin_flag,
+                'role_id': link.role_id,
+                'per_item_limit' : link.per_item_limit,
+                'per_transaction_limit': link.per_transaction_limit,
+                'created_by': link.created_by,
+                'created_dt' : link.created_dt
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+ns_roleprogramm = Namespace('role/link/program', description="role program Master API")
+@ns_roleprogramm.route("/v1/roles/linked/tree")
+class EppsRoleMstView(Resource):
+    # @jwt_required()
+    @ns_roleprogramm.doc(description='Endpoint to get department details', params={
+        'roleCode':  {'description': 'provide roleCode', 'type': 'integer','required':True},
+        'divisionCode':  {'description': 'provide divisionCode', 'type': 'integer'},
+        'companyCode':  {'description': 'provide company code', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'adminFlag':  {'description': 'provide adminFlag', 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        company_code = request.args.get('companyCode')
+        role_code = request.args.get('roleCode')
+        division_code = request.args.get('divisionCode')
+        is_active = request.args.get("isActive")
+
+        query = EppsRoleProgLnk.query
+
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if role_code:
+            query = query.filter_by(role_cd=role_code)
+        if division_code:
+            query = query.filter_by(div_cd=division_code)
+        if is_active is not None:
+            query = query.filter(EppsRoleProgLnk.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'div_cd': link.div_cd,
+                'role_cd': link.role_cd,
+                'prog_cd' : link.prog_cd,
+                'created_by': link.created_by,
+                'created_dt' : link.created_dt,
+                'updated_by' : link.updated_by,
+                'updated_dt' : link.updated_dt,
+                'terminal_id': link.terminal_id,
+                'active_yn' : link.active_yn
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+    
+
+@ns_roleprogramm.route("/v1/<int:roleCode>")
+class EppsRoleProgLnkView(Resource):
+    # @jwt_required()
+    @ns_roleprogramm.doc(description='Endpoint to get department details', params={
+        'companyCode':  {'description': 'provide company code', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'auditTrailYn': {'description': 'auditTrailYn (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self, roleCode):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        company_code = request.args.get('companyCode')
+        is_active = request.args.get("isActive")
+
+        query = EppsRoleProgLnk.query.filter_by(role_cd=roleCode)
+
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if is_active is not None:
+            query = query.filter(EppsRoleProgLnk.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'div_cd': link.div_cd,
+                'role_cd': link.role_cd,
+                'prog_cd' : link.prog_cd,
+                'created_by': link.created_by,
+                'created_dt' : link.created_dt,
+                'updated_by' : link.updated_by,
+                'updated_dt' : link.updated_dt,
+                'terminal_id': link.terminal_id,
+                'active_yn' : link.active_yn
+            })
+
+        return jsonify({
+            'company-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+ns_stage= Namespace('stage', description="stage Master API")
+@ns_stage.route("/v1")
+class EppsStageMstView(Resource):
+    # @jwt_required()
+    @ns_stage.doc(description='Endpoint to get department details', params={
+        'companyCode':  {'description': 'provide company code', 'type': 'integer'},
+        'tiCode':  {'description': 'provide tiCode', 'type': 'string'},
+        'stageDescription':  {'description': 'provide stageDescription', 'type': 'integer'},
+        'stageCode':  {'description': 'provide stageCode', 'type': 'string'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'auditTrailYn':  {'description': 'provide auditTrailYn', 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        company_code = request.args.get('companyCode')
+        ti_code = request.args.get('tiCode')
+        stage_description = request.args.get('stageDescription')
+        stage_code = request.args.get('stageCode')
+        is_active = request.args.get("isActive")
+
+        query = EppsStageMst.query
+
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if ti_code:
+            query = query.filter_by(ti_code=ti_code)
+        if stage_description:
+            query = query.filter_by(stage_desc=stage_description)
+        if stage_code:
+            query = query.filter_by(stage_cd=stage_code)
+        if is_active is not None:
+            query = query.filter(EppsStageMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'ti_code' : link.ti_code,
+                'stage_cd' : link.stage_cd,
+                'stage_desc': link.stage_desc,
+                'created_by' : link.created_by,
+                'created_dt': link.created_dt,
+                'updated_by': link.updated_by,
+                'updated_dt' : link.updated_dt,
+                'terminal_id': link.terminal_id,
+                'active_yn' : link.active_yn,
+                'creator_role_cd' : link.creator_role_cd,
+                'updator_role_cd': link.updator_role_cd,
+                'module_id': link.module_id
+            })
+
+        return jsonify({
+            '-master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+    
+ns_state = Namespace('state', description="state Master API")
+@ns_state.route("/v1")
+class EppsStateMstView(Resource):
+    # @jwt_required()
+    @ns_state.doc(description='Endpoint to get department details', params={
+        'companyCode':  {'description': 'provide company code', 'type': 'integer'},
+        'countryCode':  {'description': 'provide countryCode', 'type': 'integer'},
+        'isActive': {'description': 'Active dropdown (1 or 0)', 'enum': ['1', '0'], 'type': 'integer'},
+        'auditTrailYn':  {'description': 'provide auditTrailYn', 'type': 'integer'},
+        'page': 'Page number',
+        'per_page': 'Items per page'
+    })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+
+        company_code = request.args.get('companyCode')
+        country_code = request.args.get('countryCode')
+        is_active = request.args.get("isActive")
+
+        query = EppsStateMst.query
+
+        if company_code:
+            query = query.filter_by(comp_cd=company_code)
+        if country_code:
+            query = query.filter_by(country_cd=country_code)
+        if is_active is not None:
+            query = query.filter(EppsStateMst.active_yn == ('Y' if int(is_active) == 1 else 'N'))
+
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'country_cd' : link.country_cd,
+                'state_cd' : link.state_cd,
+                'state_nm' : link.state_nm,
+                'created_by' : link.created_by,
+                'created_dt': link.created_dt,
+                'updated_by' : link.updated_by,
+                'updated_dt' : link.updated_dt,
+                'terminal_id': link.terminal_id,
+                'active_yn': link.active_yn,
+                'creator_role_cd' : link.creator_role_cd,
+                'updator_role_cd' : link.updator_role_cd,
+                'gst_state_cd' : link.gst_state_cd,
+                'gstin_type': link.gstin_type,
+                'gstin_state_abbr': link.gstin_state_abbr
+            })
+
+        return jsonify({
+            'state master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+    
+
+ns_subgroup = Namespace('item/subgroup', description="State Master API")
+
+# Define parser for request arguments
+parser = reqparse.RequestParser()
+parser.add_argument('companyCode', type=int, required=True, help='Provide Company Code')
+parser.add_argument('groupCodes', type=str, help='Provide List of groupCodes')
+parser.add_argument('subGroupCodes', type=str, help='Provide List of subgroupCodes')
+parser.add_argument('isActive', type=int, help='Active 1/0')
+
+@ns_subgroup.route("/v1")
+class LocationListView(Resource):
+    @ns_subgroup.doc(description='API for fetching location list based on provided location code list',
+                     params={
+                         'companyCode': 'Provide Company Code',
+                         'groupCodes': {'description': 'Provide List of groupCodes', 'type': 'array',
+                                       'items': {'type': 'integer'}},
+                        'subGroupCodes': {'description': 'Provide List of subgroupCodes', 'type': 'array',
+                                       'items': {'type': 'integer'}},
+                        
+                         'isActive': 'Active 1/0',
+                     })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+        
+        # Parse request arguments
+        args = parser.parse_args()
+        company_code = args['companyCode']
+        is_active = args['isActive']
+        group_codes = args.get('groupCodes', [])
+        sub_group_codes = args.get('subGroupCodes', [])
+
+        query = EppsMmSubGroupMst.query
+
+        if company_code:
+            query = query.filter(EppsMmSubGroupMst.comp_cd == company_code)
+        if is_active is not None:
+            query = query.filter(EppsMmSubGroupMst.active_yn == ('Y' if is_active == 1 else 'N'))
+
+        # Filter by multiple group codes
+        if group_codes:
+            group_codes = [int(code) for code in group_codes.split(',')]
+            query = query.filter(EppsMmSubGroupMst.grp_cd.in_(group_codes))
+        
+        # Filter by multiple subgroup codes
+        if sub_group_codes:
+            sub_group_codes = [int(code) for code in sub_group_codes.split(',')]
+            query = query.filter(EppsMmSubGroupMst.grs_cd.in_(sub_group_codes))
+
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'grp_cd': link.grp_cd,
+                'grs_cd' : link.grs_cd,
+                'grs_disp_name' : link.grs_disp_name,
+                'grs_long_name' : link.grs_long_name,
+                'mnt_grp_flag': link.mnt_grp_flag,
+                'created_by' : link.created_by,
+                'created_dt' : link.created_dt,
+                'updated_by': link.updated_by,
+                'updated_dt': link.updated_dt,
+                'terminal_id': link.terminal_id,
+                'active_yn' : link.active_yn
+            })
+
+        return jsonify({
+            'state master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+
+ns_subsubgroup = Namespace('item/subsubgroup', description="subsubgroup Master API")
+
+# Define parser for request arguments
+parser = reqparse.RequestParser()
+parser.add_argument('companyCode', type=int, required=True, help='Provide Company Code')
+parser.add_argument('groupCodes', type=int, help='Provide List of groupCodes')
+parser.add_argument('subGroupCodes', type=int, help='Provide List of subgroupCodes')
+parser.add_argument('subSubGroupCodes', type=int, help='Provide List of subsubgroupCodes')
+parser.add_argument('isActive', type=int, help='Active 1/0')
+
+@ns_subsubgroup.route("/v1")
+class LocationListView(Resource):
+    @ns_subsubgroup.doc(description='API for fetching location list based on provided location code list',
+                     params={
+                         'companyCode': 'Provide Company Code',
+                         'groupCodes': {'description': 'Provide List of groupCodes', 'type': 'array',
+                                       'items': {'type': 'integer'}},
+                        'subGroupCodes': {'description': 'Provide List of subgroupCodes', 'type': 'array',
+                                       'items': {'type': 'integer'}},
+                        'subSubGroupCodes': {'description': 'Provide List of subgroupCodes', 'type': 'array',
+                                       'items': {'type': 'integer'}},
+                         'isActive': 'Active 1/0',
+                     })
+    def get(self):
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 100)), 100)
+        
+        # Parse request arguments
+        args = parser.parse_args()
+        company_code = args['companyCode']
+        is_active = args['isActive']
+        group_codes = args.get('groupCodes', [])
+        sub_group_codes = args.get('subGroupCodes', [])
+        sub_sub_group_codes = args.get('subSubGroupCodes',[])
+
+        query = EppsMmSubSubGroupMst.query
+
+        if company_code:
+            query = query.filter(EppsMmSubSubGroupMst.comp_cd == company_code)
+        if is_active is not None:
+            query = query.filter(EppsMmSubSubGroupMst.active_yn == ('Y' if is_active == 1 else 'N'))
+
+        # Filter by multiple group codes
+        if group_codes:
+            group_codes = [int(code) for code in group_codes.split(',')]
+            query = query.filter(EppsMmSubSubGroupMst.grp_cd.in_(group_codes))
+        
+        # Filter by multiple subgroup codes
+        if sub_group_codes:
+            sub_group_codes = [int(code) for code in sub_group_codes.split(',')]
+            query = query.filter(EppsMmSubSubGroupMst.grs_cd.in_(sub_group_codes))
+
+        if sub_sub_group_codes:
+            sub_group_codes = [int(code) for code in sub_sub_group_codes.split(',')]
+            query = query.filter(EppsMmSubSubGroupMst.grs_cd.in_(sub_sub_group_codes))
+        total_records = query.count()
+
+        offset = (page - 1) * per_page
+
+        pagination = query.offset(offset).limit(per_page).all()
+        result = []
+        for link in pagination:
+            result.append({
+                'comp_cd': link.comp_cd,
+                'grp_cd': link.grp_cd,
+                'grs_cd' : link.grs_cd,
+                'grss_cd': link.grss_cd,
+                'grs_disp_name' : link.grs_disp_name,
+                'grs_long_name' : link.grs_long_name,
+                'mnt_grp_flag': link.mnt_grp_flag,
+                'created_by' : link.created_by,
+                'created_dt' : link.created_dt,
+                'updated_by': link.updated_by,
+                'updated_dt': link.updated_dt,
+                'terminal_id': link.terminal_id,
+                'active_yn' : link.active_yn
+            })
+
+        return jsonify({
+            'subsubgroup master': result,
+            'page': page,
+            'per_page': per_page,
+            'total_items': total_records
+        })
+
+import os
+from flask import jsonify, request
+from flask_restx import Namespace, Resource, fields
+from .extensions import api
+
+
+# Define the maximum allowed file size in bytes (e.g., 10MB)
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
+
+# Modify the upload directory path
+upload_dir = '/home/epps/sakshi_workspace/python_my_code/admin_api/uploads'
+
+# Define model for file upload response
+ns_upload = Namespace('upload', description="Upload File")
+
+# Define model for file upload response
+upload_response_model = api.model('UploadResponse', {
+    'message': fields.String(description='Message indicating the status of the file upload'),
+    'filename': fields.String(description='Name of the uploaded file')
+})
+
+# Define a file upload parser for Flask-Restx
+upload_parser = ns_upload.parser()
+upload_parser.add_argument('file', location='files', type='file', required=True)
+
+# Route for uploading files
+@ns_upload.route('/file')
+class UploadFile(Resource):
+    @ns_upload.doc(description='Upload a file', parser=upload_parser)
+    @ns_upload.response(200, 'Success', upload_response_model)
+    def post(self):
+        # Access the file from the request
+        file = request.files['file']
+
+        # If the user does not select a file, the browser submits an empty file without a filename
+        if file.filename == '':
+            return {'error': 'No selected file'}, 400
+
+        # Check if the file size exceeds the maximum allowed size
+        if len(file.read()) > MAX_FILE_SIZE_BYTES:
+            return {'error': 'File size exceeds the maximum allowed size'}, 400
+        else:
+            file.seek(0)  # Reset file pointer to the beginning for saving the file
+
+        # Save the uploaded file to the specified directory on the server
+        if not os.path.exists(upload_dir):
+            os.makedirs(upload_dir)
+
+        file.save(os.path.join(upload_dir, file.filename))
+
+        return {'message': 'File uploaded successfully', 'filename': file.filename}, 200
